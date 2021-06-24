@@ -1,11 +1,11 @@
 /*eslint-disable */
-const _ = require("lodash");
 const { MoleculerServerError } = require("moleculer").Errors;
 const IgniteClient = require("apache-ignite-client");
 const mybatisMapper = require("mybatis-mapper");
 
 const IgniteClientConfiguration = IgniteClient.IgniteClientConfiguration;
 const SqlFieldsQuery = IgniteClient.SqlFieldsQuery;
+const CacheConfiguration = IgniteClient.CacheConfiguration;
 
 class IgniteAdapter {
   /**
@@ -16,7 +16,7 @@ class IgniteAdapter {
    */
   constructor(opts) {
     this.opts = opts;
-    this.mapper = _.cloneDeep(mybatisMapper);
+    this.mapper = mybatisMapper;
   }
 
   /**
@@ -52,10 +52,15 @@ class IgniteAdapter {
       .setUserName(this.opts.user) // https://ignite.apache.org/docs/latest/security/authentication
       .setPassword(this.opts.password) // https://www.bswen.com/2018/10/java-How-to-solve-Apache-ignite-IgniteException-Can-not-perform-the-operation-because-the-cluster-is-inactive.html
       .setConnectionOptions(this.opts.useTLS, this.opts.connectionOptions); // https://ignite.apache.org/docs/latest/thin-clients/nodejs-thin-client#partition-awareness
-    this.mapper.createMapper([this.service.schema.settings.mapperDir]);
+    this.mapper.createMapper(this.service.schema.settings.mapperDir);
     return this.client
       .connect(this.configuration)
-      .then(() => this.client.getOrCreateCache(this.opts.cache))
+      .then(() =>
+        this.client.getOrCreateCache(
+          this.opts.cache,
+          new CacheConfiguration.setSqlSchema(this.opts.schema)
+        )
+      )
       .then((cache) => {
         this.db = cache;
         this.db.sendQuery = this.sendQuery.bind(this);
@@ -80,15 +85,16 @@ class IgniteAdapter {
   /**
    * Send SQL Query to Database
    *
+   * @param {string} namespace
    * @param {string} id
    * @param {object?} params
    * @returns {Promise}
    *
    * @memberof IgniteAdapter
    */
-  async sendQuery(id, params) {
-    const sql = this.mapper.getStatement("ignite", id, params);
-    this.service.logger.info(sql);
+  async sendQuery(namespace, id, params) {
+    const sql = this.mapper.getStatement(namespace, id, params);
+    //this.service.logger.info(sql);
     try {
       let results = [];
       const sqlFieldsQuery = new SqlFieldsQuery(sql).setIncludeFieldNames(true);
