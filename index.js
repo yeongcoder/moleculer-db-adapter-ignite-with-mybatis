@@ -93,7 +93,6 @@ class IgniteAdapter {
       let results = [];
       const sqlFieldsQuery = new SqlFieldsQuery(sql).setIncludeFieldNames(true);
       const cursor = await this.db.query(sqlFieldsQuery);
-      this.service.logger.info("cursor: ", cursor);
 
       do {
         let value = await cursor.getValue();
