@@ -1,5 +1,6 @@
 /*eslint-disable */
 const _ = require("lodash");
+const urlParse = require("url-parse");
 const { MoleculerServerError } = require("moleculer").Errors;
 const IgniteClient = require("apache-ignite-client");
 const mybatisMapper = require("mybatis-mapper");
@@ -43,12 +44,9 @@ class IgniteAdapter {
    * @memberof IgniteAdapter
    */
   connect() {
-    const host = this._getHostFromUrl(this.url);
-    const user = this._getUserFromUrl(this.url);
-    const password = this._getPasswordFromUrl(this.url);
-    const schema = this._getSchemaFromUrl(this.url);
-    const useTls = this.opts.useTls;
+    const parsed = urlParse(this.url, true);
     const connectionOption = this._getConnectOptions(this.opts);
+    const useTls = this.opts.useTls;
     if (!this.service.schema.settings.mapperDir) {
       throw new MoleculerServerError(
         "Missing `mapperDir` definition in schema.settings of service!"
@@ -57,9 +55,9 @@ class IgniteAdapter {
     this.client = new IgniteClient((state, reason) => {
       this.service.logger.info("Ignite StateChanged", state, reason);
     });
-    const igniteConfiguration = new IgniteClientConfiguration(host)
-      .setUserName(user)
-      .setPassword(password)
+    const igniteConfiguration = new IgniteClientConfiguration(parsed.host)
+      .setUserName(parsed.username)
+      .setPassword(parsed.password)
       .setConnectionOptions(useTls, connectionOption);
     this.mapper.createMapper(this.service.schema.settings.mapperDir);
     return this.client
@@ -67,7 +65,7 @@ class IgniteAdapter {
       .then(() =>
         this.client.getOrCreateCache(
           this.opts.cache,
-          new CacheConfiguration().setSqlSchema(schema)
+          new CacheConfiguration().setSqlSchema(parsed.pathname.replace("/", ""))
         )
       )
       .then((cache) => {
@@ -136,54 +134,6 @@ class IgniteAdapter {
     const optionCopy = _.cloneDeep(option);
     delete optionCopy.useTls;
     return optionCopy;
-  }
-
-  /**
-   * Send SQL Query to Database
-   *
-   * @param {string} url
-   * @returns {string}
-   *
-   * @memberof MariaDbAdapter
-   */
-  _getHostFromUrl(url) {
-    return url.match(/@(.*:\d*)/g)[0].replace("@", "");
-  }
-
-  /**
-   * Send SQL Query to Database
-   *
-   * @param {string} url
-   * @returns {string}
-   *
-   * @memberof MariaDbAdapter
-   */
-  _getSchemaFromUrl(url) {
-    return url.match(/\/\w*$/g)[0].replace("/", "");
-  }
-
-  /**
-   * Send SQL Query to Database
-   *
-   * @param {string} url
-   * @returns {string}
-   *
-   * @memberof MariaDbAdapter
-   */
-  _getUserFromUrl(url) {
-    return url.match(/\/\w*(?=:)/g)[0].replace("/", "");
-  }
-
-  /**
-   * Send SQL Query to Database
-   *
-   * @param {string} url
-   * @returns {string}
-   *
-   * @memberof MariaDbAdapter
-   */
-  _getPasswordFromUrl(url) {
-    return url.match(/\:\w*(?=@)/g)[0].replace(":", "");
   }
 }
 
